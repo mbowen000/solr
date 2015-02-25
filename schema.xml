@@ -1,0 +1,831 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<!--  
+ This is the Solr schema file. This file should be named "schema.xml" and
+ should be in the conf directory under the solr home
+ (i.e. ./solr/conf/schema.xml by default) 
+ or located where the classloader for the Solr webapp can find it.
+
+ This example schema is the recommended starting point for users.
+ It should be kept correct and concise, usable out-of-the-box.
+
+ For more information, on how to customize this file, please see
+ http://wiki.apache.org/solr/SchemaXml
+
+ PERFORMANCE NOTE: this schema includes many optional features and should not
+ be used for benchmarking.  To improve performance one could
+  - set stored="false" for all fields possible (esp large fields) when you
+    only need to search on the field but don't need to return the original
+    value.
+  - set indexed="false" if you don't need to search on the field, but only
+    return the field as a result of searching on other indexed fields.
+  - remove all unneeded copyField statements
+  - for best index size and searching performance, set "index" to false
+    for all general text fields, use copyField to copy them to the
+    catchall "text" field, and use that for searching.
+  - For maximum indexing performance, use the StreamingUpdateSolrServer
+    java client.
+  - Remember to run the JVM in server mode, and use a higher logging level
+    that avoids logging every request
+-->
+
+<schema name="example" version="1.2">
+  <!-- attribute "name" is the name of this schema and is only used for display purposes.
+       Applications should change this to reflect the nature of the search collection.
+       version="1.2" is Solr's version number for the schema syntax and semantics.  It should
+       not normally be changed by applications.
+       1.0: multiValued attribute did not exist, all fields are multiValued by nature
+       1.1: multiValued attribute introduced, false by default 
+       1.2: omitTermFreqAndPositions attribute introduced, true by default except for text fields.
+     -->
+
+  <types>
+    <!-- field type definitions. The "name" attribute is
+       just a label to be used by field definitions.  The "class"
+       attribute and any other attributes determine the real
+       behavior of the fieldType.
+         Class names starting with "solr" refer to java classes in the
+       org.apache.solr.analysis package.
+    -->
+
+    <!-- The StrField type is not analyzed, but indexed/stored verbatim.  
+       - StrField and TextField support an optional compressThreshold which
+       limits compression (if enabled in the derived fields) to values which
+       exceed a certain size (in characters).
+    -->
+    <fieldType name="string" class="solr.StrField" sortMissingLast="true" omitNorms="true"/>
+
+    <!-- boolean type: "true" or "false" -->
+    <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true" omitNorms="true"/>
+    <!--Binary data type. The data should be sent/retrieved in as Base64 encoded Strings -->
+    <fieldtype name="binary" class="solr.BinaryField"/>
+
+    <!-- The optional sortMissingLast and sortMissingFirst attributes are
+         currently supported on types that are sorted internally as strings.
+	       This includes "string","boolean","sint","slong","sfloat","sdouble","pdate"
+       - If sortMissingLast="true", then a sort on this field will cause documents
+         without the field to come after documents with the field,
+         regardless of the requested sort order (asc or desc).
+       - If sortMissingFirst="true", then a sort on this field will cause documents
+         without the field to come before documents with the field,
+         regardless of the requested sort order.
+       - If sortMissingLast="false" and sortMissingFirst="false" (the default),
+         then default lucene sorting will be used which places docs without the
+         field first in an ascending sort and last in a descending sort.
+    -->    
+
+    <!--
+      Default numeric field types. For faster range queries, consider the tint/tfloat/tlong/tdouble types.
+    -->
+    <fieldType name="int" class="solr.TrieIntField" precisionStep="0" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="float" class="solr.TrieFloatField" precisionStep="0" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="long" class="solr.TrieLongField" precisionStep="0" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="double" class="solr.TrieDoubleField" precisionStep="0" omitNorms="true" positionIncrementGap="0"/>
+
+    <!--
+     Numeric field types that index each value at various levels of precision
+     to accelerate range queries when the number of values between the range
+     endpoints is large. See the javadoc for NumericRangeQuery for internal
+     implementation details.
+
+     Smaller precisionStep values (specified in bits) will lead to more tokens
+     indexed per value, slightly larger index size, and faster range queries.
+     A precisionStep of 0 disables indexing at different precision levels.
+    -->
+    <fieldType name="tint" class="solr.TrieIntField" precisionStep="8" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tfloat" class="solr.TrieFloatField" precisionStep="8" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tlong" class="solr.TrieLongField" precisionStep="8" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tdouble" class="solr.TrieDoubleField" precisionStep="8" omitNorms="true" positionIncrementGap="0"/>
+
+    <!-- The format for this date field is of the form 1995-12-31T23:59:59Z, and
+         is a more restricted form of the canonical representation of dateTime
+         http://www.w3.org/TR/xmlschema-2/#dateTime    
+         The trailing "Z" designates UTC time and is mandatory.
+         Optional fractional seconds are allowed: 1995-12-31T23:59:59.999Z
+         All other components are mandatory.
+
+         Expressions can also be used to denote calculations that should be
+         performed relative to "NOW" to determine the value, ie...
+
+               NOW/HOUR
+                  ... Round to the start of the current hour
+               NOW-1DAY
+                  ... Exactly 1 day prior to now
+               NOW/DAY+6MONTHS+3DAYS
+                  ... 6 months and 3 days in the future from the start of
+                      the current day
+                      
+         Consult the DateField javadocs for more information.
+
+         Note: For faster range queries, consider the tdate type
+      -->
+    <fieldType name="date" class="solr.TrieDateField" omitNorms="true" precisionStep="0" positionIncrementGap="0"/>
+
+    <!-- A Trie based date field for faster date range queries and date faceting. -->
+    <fieldType name="tdate" class="solr.TrieDateField" omitNorms="true" precisionStep="6" positionIncrementGap="0"/>
+
+
+    <!--
+      Note:
+      These should only be used for compatibility with existing indexes (created with older Solr versions)
+      or if "sortMissingFirst" or "sortMissingLast" functionality is needed. Use Trie based fields instead.
+
+      Plain numeric field types that store and index the text
+      value verbatim (and hence don't support range queries, since the
+      lexicographic ordering isn't equal to the numeric ordering)
+    -->
+    <fieldType name="pint" class="solr.IntField" omitNorms="true"/>
+    <fieldType name="plong" class="solr.LongField" omitNorms="true"/>
+    <fieldType name="pfloat" class="solr.FloatField" omitNorms="true"/>
+    <fieldType name="pdouble" class="solr.DoubleField" omitNorms="true"/>
+    <fieldType name="pdate" class="solr.DateField" sortMissingLast="true" omitNorms="true"/>
+
+
+    <!--
+      Note:
+      These should only be used for compatibility with existing indexes (created with older Solr versions)
+      or if "sortMissingFirst" or "sortMissingLast" functionality is needed. Use Trie based fields instead.
+
+      Numeric field types that manipulate the value into
+      a string value that isn't human-readable in its internal form,
+      but with a lexicographic ordering the same as the numeric ordering,
+      so that range queries work correctly.
+    -->
+    <fieldType name="sint" class="solr.SortableIntField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="slong" class="solr.SortableLongField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="sfloat" class="solr.SortableFloatField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="sdouble" class="solr.SortableDoubleField" sortMissingLast="true" omitNorms="true"/>
+
+
+    <!-- The "RandomSortField" is not used to store or search any
+         data.  You can declare fields of this type it in your schema
+         to generate pseudo-random orderings of your docs for sorting 
+         purposes.  The ordering is generated based on the field name 
+         and the version of the index, As long as the index version
+         remains unchanged, and the same field name is reused,
+         the ordering of the docs will be consistent.  
+         If you want different psuedo-random orderings of documents,
+         for the same version of the index, use a dynamicField and
+         change the name
+     -->
+    <fieldType name="random" class="solr.RandomSortField" indexed="true" />
+
+    <!-- solr.TextField allows the specification of custom text analyzers
+         specified as a tokenizer and a list of token filters. Different
+         analyzers may be specified for indexing and querying.
+
+         The optional positionIncrementGap puts space between multiple fields of
+         this type on the same document, with the purpose of preventing false phrase
+         matching across fields.
+
+         For more info on customizing your analyzer chain, please see
+         http://wiki.apache.org/solr/AnalyzersTokenizersTokenFilters
+     -->
+
+    <!-- One can also specify an existing Analyzer class that has a
+         default constructor via the class attribute on the analyzer element
+    <fieldType name="text_greek" class="solr.TextField">
+      <analyzer class="org.apache.lucene.analysis.el.GreekAnalyzer"/>
+    </fieldType>
+    -->
+
+    <!-- A text field that only splits on whitespace for exact matching of words -->
+    <fieldType name="text_ws" class="solr.TextField" positionIncrementGap="100">
+      <analyzer>
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      </analyzer>
+    </fieldType>
+
+    <!-- A text field that uses WordDelimiterFilter to enable splitting and matching of
+        words on case-change, alpha numeric boundaries, and non-alphanumeric chars,
+        so that a query of "wifi" or "wi fi" could match a document containing "Wi-Fi".
+        Synonyms and stopwords are customized by external files, and stemming is enabled.
+        -->
+    <fieldType name="text" class="solr.TextField" positionIncrementGap="100">
+      <analyzer type="index">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <!-- in this example, we will only use synonyms at query time
+        <filter class="solr.SynonymFilterFactory" synonyms="index_synonyms.txt" ignoreCase="true" expand="false"/>
+        -->
+        <!-- Case insensitive stop word removal.
+          add enablePositionIncrements=true in both the index and query
+          analyzers to leave a 'gap' for more accurate phrase queries.
+        -->
+        <filter class="solr.StopFilterFactory"
+                ignoreCase="true"
+                words="stopwords.txt"
+                enablePositionIncrements="true"
+                />
+        <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="1" catenateNumbers="1" catenateAll="0" splitOnCaseChange="1"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+        <filter class="solr.SnowballPorterFilterFactory" language="English" protected="protwords.txt"/>
+      </analyzer>
+      <analyzer type="query">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="true"/>
+        <filter class="solr.StopFilterFactory"
+                ignoreCase="true"
+                words="stopwords.txt"
+                enablePositionIncrements="true"
+                />
+        <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="0" catenateNumbers="0" catenateAll="0" splitOnCaseChange="1"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+        <filter class="solr.SnowballPorterFilterFactory" language="English" protected="protwords.txt"/>
+      </analyzer>
+    </fieldType>
+
+
+    <!-- Less flexible matching, but less false matches.  Probably not ideal for product names,
+         but may be good for SKUs.  Can insert dashes in the wrong place and still match. -->
+    <fieldType name="textTight" class="solr.TextField" positionIncrementGap="100" >
+      <analyzer>
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="false"/>
+        <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt"/>
+        <filter class="solr.WordDelimiterFilterFactory" generateWordParts="0" generateNumberParts="0" catenateWords="1" catenateNumbers="1" catenateAll="0"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+        <filter class="solr.SnowballPorterFilterFactory" language="English" protected="protwords.txt"/>
+        <!-- this filter can remove any duplicate tokens that appear at the same position - sometimes
+             possible with WordDelimiterFilter in conjuncton with stemming. -->
+        <filter class="solr.RemoveDuplicatesTokenFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
+
+    <!-- A general unstemmed text field - good if one does not know the language of the field -->
+    <fieldType name="textgen" class="solr.TextField" positionIncrementGap="100">
+      <analyzer type="index">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt" enablePositionIncrements="true" />
+        <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="1" catenateNumbers="1" catenateAll="0" splitOnCaseChange="0"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+      </analyzer>
+      <analyzer type="query">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="true"/>
+        <filter class="solr.StopFilterFactory"
+                ignoreCase="true"
+                words="stopwords.txt"
+                enablePositionIncrements="true"
+                />
+        <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="0" catenateNumbers="0" catenateAll="0" splitOnCaseChange="0"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
+
+    <!-- A general unstemmed text field that indexes tokens normally and also
+         reversed (via ReversedWildcardFilterFactory), to enable more efficient 
+	 leading wildcard queries. -->
+    <fieldType name="text_rev" class="solr.TextField" positionIncrementGap="100">
+      <analyzer type="index">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.StopFilterFactory" ignoreCase="true" words="stopwords.txt" enablePositionIncrements="true" />
+        <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="1" catenateNumbers="1" catenateAll="0" splitOnCaseChange="0"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+        <filter class="solr.ReversedWildcardFilterFactory" withOriginal="true"
+           maxPosAsterisk="3" maxPosQuestion="2" maxFractionAsterisk="0.33"/>
+      </analyzer>
+      <analyzer type="query">
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <filter class="solr.SynonymFilterFactory" synonyms="synonyms.txt" ignoreCase="true" expand="true"/>
+        <filter class="solr.StopFilterFactory"
+                ignoreCase="true"
+                words="stopwords.txt"
+                enablePositionIncrements="true"
+                />
+        <filter class="solr.WordDelimiterFilterFactory" generateWordParts="1" generateNumberParts="1" catenateWords="0" catenateNumbers="0" catenateAll="0" splitOnCaseChange="0"/>
+        <filter class="solr.LowerCaseFilterFactory"/>
+      </analyzer>
+    </fieldType>
+
+    <!-- charFilter + WhitespaceTokenizer  -->
+    <!--
+    <fieldType name="textCharNorm" class="solr.TextField" positionIncrementGap="100" >
+      <analyzer>
+        <charFilter class="solr.MappingCharFilterFactory" mapping="mapping-ISOLatin1Accent.txt"/>
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      </analyzer>
+    </fieldType>
+    -->
+
+    <!-- This is an example of using the KeywordTokenizer along
+         With various TokenFilterFactories to produce a sortable field
+         that does not include some properties of the source text
+      -->
+    <fieldType name="alphaOnlySort" class="solr.TextField" sortMissingLast="true" omitNorms="true">
+      <analyzer>
+        <!-- KeywordTokenizer does no actual tokenizing, so the entire
+             input string is preserved as a single token
+          -->
+        <tokenizer class="solr.KeywordTokenizerFactory"/>
+        <!-- The LowerCase TokenFilter does what you expect, which can be
+             when you want your sorting to be case insensitive
+          -->
+        <filter class="solr.LowerCaseFilterFactory" />
+        <!-- The TrimFilter removes any leading or trailing whitespace -->
+        <filter class="solr.TrimFilterFactory" />
+        <!-- The PatternReplaceFilter gives you the flexibility to use
+             Java Regular expression to replace any sequence of characters
+             matching a pattern with an arbitrary replacement string, 
+             which may include back references to portions of the original
+             string matched by the pattern.
+             
+             See the Java Regular Expression documentation for more
+             information on pattern and replacement string syntax.
+             
+             http://java.sun.com/j2se/1.5.0/docs/api/java/util/regex/package-summary.html
+          -->
+        <filter class="solr.PatternReplaceFilterFactory"
+                pattern="([^a-z])" replacement="" replace="all"
+        />
+      </analyzer>
+    </fieldType>
+    
+    <fieldtype name="phonetic" stored="false" indexed="true" class="solr.TextField" >
+      <analyzer>
+        <tokenizer class="solr.StandardTokenizerFactory"/>
+        <filter class="solr.DoubleMetaphoneFilterFactory" inject="false"/>
+      </analyzer>
+    </fieldtype>
+
+    <fieldtype name="payloads" stored="false" indexed="true" class="solr.TextField" >
+      <analyzer>
+        <tokenizer class="solr.WhitespaceTokenizerFactory"/>
+        <!--
+        The DelimitedPayloadTokenFilter can put payloads on tokens... for example,
+        a token of "foo|1.4"  would be indexed as "foo" with a payload of 1.4f
+        Attributes of the DelimitedPayloadTokenFilterFactory : 
+         "delimiter" - a one character delimiter. Default is | (pipe)
+	 "encoder" - how to encode the following value into a playload
+	    float -> org.apache.lucene.analysis.payloads.FloatEncoder,
+	    integer -> o.a.l.a.p.IntegerEncoder
+	    identity -> o.a.l.a.p.IdentityEncoder
+            Fully Qualified class name implementing PayloadEncoder, Encoder must have a no arg constructor.
+         -->
+        <filter class="solr.DelimitedPayloadTokenFilterFactory" encoder="float"/>
+      </analyzer>
+    </fieldtype>
+
+    <!-- lowercases the entire field value, keeping it as a single token.  -->
+    <fieldType name="lowercase" class="solr.TextField" positionIncrementGap="100">
+      <analyzer>
+        <tokenizer class="solr.KeywordTokenizerFactory"/>
+        <filter class="solr.LowerCaseFilterFactory" />
+      </analyzer>
+    </fieldType>
+
+
+    <!-- since fields of this type are by default not stored or indexed,
+         any data added to them will be ignored outright.  --> 
+    <fieldtype name="ignored" stored="false" indexed="false" multiValued="true" class="solr.StrField" /> 
+
+ </types>
+
+
+ <fields>
+   <!-- Valid attributes for fields:
+     name: mandatory - the name for the field
+     type: mandatory - the name of a previously defined type from the 
+       <types> section
+     indexed: true if this field should be indexed (searchable or sortable)
+     stored: true if this field should be retrievable
+     compressed: [false] if this field should be stored using gzip compression
+       (this will only apply if the field type is compressable; among
+       the standard field types, only TextField and StrField are)
+     multiValued: true if this field may contain multiple values per document
+     omitNorms: (expert) set to true to omit the norms associated with
+       this field (this disables length normalization and index-time
+       boosting for the field, and saves some memory).  Only full-text
+       fields or fields that need an index-time boost need norms.
+     termVectors: [false] set to true to store the term vector for a
+       given field.
+       When using MoreLikeThis, fields used for similarity should be
+       stored for best performance.
+     termPositions: Store position information with the term vector.  
+       This will increase storage costs.
+     termOffsets: Store offset information with the term vector. This 
+       will increase storage costs.
+     default: a value that should be used if no value is specified
+       when adding a document.
+   -->
+
+   <field name="id" type="string" indexed="true" stored="true" required="true" />
+
+   <!-- Uncommenting the following will create a "timestamp" field using
+        a default value of "NOW" to indicate when each document was indexed.
+     -->
+   <field name="timestamp" type="date" indexed="true" stored="true" default="NOW" multiValued="false"/>
+
+
+	<!-- Begin Base Fields -->
+
+	<field name="nyp:SearchThumbnailId" type="string" indexed="true" stored="true" />
+	<field name="nyp:MetadataThumbnailId" type="string" indexed="true" stored="true" />
+
+	<field name="nyp:DocumentType" type="text" indexed="true" stored="true" />
+	<field name="nyp:physicalLocation" type="text" indexed="true" stored="true" />
+	<field name="nyp:digitalLocation" type="text" indexed="true" stored="true" />
+	<field name="nyp:WebPublishable" type="boolean" indexed="true" stored="true" />
+	<field name="nyp:Notes" type="text" indexed="true" stored="true" />
+	<field name="nyp:LocatorID" type="text" indexed="true" stored="true" />
+	<field name="nyp:ThumbnailPageIndex" type="text" indexed="true" stored="true" />
+	<field name="nyp:BookWidth" type="text" indexed="true" stored="true" />
+	<field name="nyp:BookHeight" type="text" indexed="true" stored="true" />
+	<field name="nyp:ProjectFunder" type="text" indexed="true" stored="true" />
+	<field name="nyp:CollectionGuarantor" type="text" indexed="true" stored="true" />
+	<field name="nyp:InternalNotes" type="text" indexed="true" stored="true" />
+
+    <!-- the cm:created field is only populated on TAG objects -->
+    <field name="cm:created" type="tdate" indexed="true" stored="true" />
+	<!-- End Base Fields -->
+
+	<!-- Begin Program Fields -->
+
+	<field name="npp:PerformanceNumber" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:ProgramID" type="text" indexed="true" stored="true" />
+	<field name="npp:Season" type="text" indexed="true" stored="true" />
+	<field name="npp:OrchestraCode" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:OrchestraName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:Date" type="tdate" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SortDate" type="tdate" indexed="true" stored="true" />
+	<field name="npp:Time" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:LocationCode" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:LocationName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:VenueCode" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:VenueName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:EventTypeCode" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:EventTypeName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SubEventCode" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SubEventName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SortSubEventName" type="string" indexed="true" stored="true" />
+	<field name="npp:ConductorID" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:ConductorName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:ConductorFirstName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:ConductorMiddleName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:ConductorLastName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsID" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SortSoloistsNames" type="string" indexed="true" stored="true" />
+	<field name="npp:SoloistsFirstNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsMiddleNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsLastNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsRole" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsInstrumentCode" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsInstrumentName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:ProgramWorksIDs" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksIDs" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksMovIDs" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksMovementSeq" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksComposerIDs" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksComposerNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksComposerFirstNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksComposerMiddleNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksComposerLastNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksTitle" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksShortTitle" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksConductorIDs" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksConductorNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksConductorFirstNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksConductorMiddleNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksConductorLastNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistIDs" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistFirstNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistMiddleNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistLastNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistInstrumentCodes" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistInstrumentNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksSoloistFunction" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksLibraryIDs" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:RelatedPrograms" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksIdDisplay" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:Encore" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:Comments" type="text" indexed="true" stored="true" />
+
+	<!-- End Program Fields -->
+
+	<!-- Begin Printed Music Fields -->
+
+	<field name="npm:LibraryID" type="text" indexed="true" stored="true" />
+	<field name="npm:WorksID" type="text" indexed="true" stored="true" />
+	<field name="npm:ShortTitle" type="text" indexed="true" stored="true" />
+	<field name="npm:ComposerID" type="text" indexed="true" stored="true" />
+	<field name="npm:ComposerName" type="text" indexed="true" stored="true" />
+	<field name="npm:ComposerFirstName" type="text" indexed="true" stored="true" />
+	<field name="npm:ComposerMiddleName" type="text" indexed="true" stored="true" />
+	<field name="npm:ComposerLastName" type="text" indexed="true" stored="true" />
+	<field name="npm:MusicType" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:SortMusicType" type="string" indexed="true" stored="true" />
+	<field name="npm:PublicationID" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PublisherID" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PublisherName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PublishDate" type="tdate" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ComposerNameTitle" type="text" indexed="true" stored="true" />
+	<field name="npm:UsedByID" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:UsedByArtistName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:Type" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ScoreID" type="text" indexed="true" stored="true" />
+	<field name="npm:ScoreType" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ScoreTypeDesc" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:SortScoreTypeDesc" type="string" indexed="true" stored="true" />
+	<field name="npm:ScoreMarkingID" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ScoreMarkingArtist" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ScoreEditionType" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ScoreEditionTypeDesc" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ScoreNotes" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PartID" type="text" indexed="true" stored="true" />
+	<field name="npm:PartType" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PartTypeDesc" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:SortPartTypeDesc" type="string" indexed="true" stored="true" />
+	<field name="npm:PartMarkingID" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PartMarkingArtist" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PartEditionType" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PartEditionTypeDesc" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PartNotes" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:PrintedMusicID" type="text" indexed="true" stored="true" />
+	<!-- End Printed Music Fields -->
+
+	<!-- Begin Business Historic Records -->
+	<field name="npb:BoxNumber" type="text" indexed="true" stored="true" />
+	<field name="npb:DateEntered" type="tdate" indexed="true" stored="true" />
+	<field name="npb:AccessionDate" type="tdate" indexed="true" stored="true" />
+	<field name="npb:RecordGroup" type="text" indexed="true" stored="true" />
+	<field name="npb:SortRecordGroup" type="string" indexed="true" stored="true" />
+	<field name="npb:Series" type="text" indexed="true" stored="true" />
+	<field name="npb:SortSeries" type="string" indexed="true" stored="true" />
+	<field name="npb:SubSeries" type="text" indexed="true" stored="true" />
+	<field name="npb:SortSubSeries" type="string" indexed="true" stored="true" />
+	<field name="npb:Folder" type="text" indexed="true" stored="true" />
+	<field name="npb:DateFrom" type="tdate" indexed="true" stored="true" />
+	<field name="npb:DateTo" type="tdate" indexed="true" stored="true" />
+	<field name="npb:Names" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:Subject" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:Abstract" type="text" indexed="true" stored="true" />
+	<field name="npb:ContentType" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:Initials" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:Step" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:URLLocation" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:Size" type="text" indexed="true" stored="true" />
+	<field name="npb:CreatedBy" type="text" indexed="true" stored="true" />
+	<field name="npb:ModifiedBy" type="text" indexed="true" stored="true" />
+	<field name="npb:DateModified" type="tdate" indexed="true" stored="true" />
+
+	<!-- THESE ATTRIBUTES ARE NOT DEFINED IN THE ALFRESCO CONTENT MODEL, BUT ARE POPULATED, SO WE MUST DEFINE THEM IN SOLR -->
+	<field name="npb:Condition" type="text" indexed="true" stored="true" />
+	<field name="npb:Language" type="text" indexed="true" stored="true" />
+
+	<!-- End Business Historic Records -->
+
+	<!-- Begin Video Materials -->
+	<field name="npx:ProgramID" type="text" indexed="true" stored="true" />
+	<field name="npx:Date" type="tdate" indexed="true" stored="true" />
+	<field name="npx:Location" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npx:EventTypeName" type="text" indexed="true" stored="true" />
+	<field name="npx:ConductorName" type="text" indexed="true" stored="true" />
+	<field name="npx:SoloistsAndInstruments" type="text" indexed="true" stored="true" />
+	<field name="npx:ComposerNameWork" type="text" indexed="true" stored="true" />
+	<field name="npx:OrchestraName" type="text" indexed="true" stored="true" />
+	<field name="npx:IntermissionFeature" type="text" indexed="true" stored="true" />
+	<field name="npx:Collection" type="text" indexed="true" stored="true" />
+	<field name="npx:Time" type="text" indexed="true" stored="true" />
+	<field name="npx:LocationName" type="text" indexed="true" stored="true" />
+	<field name="npx:VenueCode" type="text" indexed="true" stored="true" />
+	<field name="npx:VenueName" type="text" indexed="true" stored="true" />
+	<field name="npx:SubEventName" type="text" indexed="true" stored="true" />
+	<field name="npx:ConductorLastName" type="text" indexed="true" stored="true" />
+	<field name="npx:WorksMovSeq" type="text" indexed="true" stored="true" />
+	<field name="npx:WorksIdDisplay" type="text" indexed="true" stored="true" />
+	<field name="npx:URLLocation" type="text" indexed="true" stored="true" />
+	<field name="npx:IntermissionGuests" type="text" indexed="true" stored="true" />
+	<field name="npx:Announcer" type="text" indexed="true" stored="true" />
+	<field name="npx:Engineer" type="text" indexed="true" stored="true" />
+	<field name="npx:Producer" type="text" indexed="true" stored="true" />
+	<field name="npx:Sponsor" type="text" indexed="true" stored="true" />
+	<!-- End Video Materials -->
+
+	<!-- Begin Visual Materials -->
+	<field name="npv:BoxNumber" type="text" indexed="true" stored="true" />
+	<field name="npv:PhilharmonicSource" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:OutsideSource" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:Photographer" type="text" indexed="true" stored="true" />
+	<field name="npv:CopyrightHolder" type="text" indexed="true" stored="true" />
+	<field name="npv:DateFrom" type="tdate" indexed="true" stored="true" />
+	<field name="npv:DateTo" type="tdate" indexed="true" stored="true" />
+	<field name="npv:ArchiveLocationOriginal" type="text" indexed="true" stored="true" />
+	<field name="npv:PlaceOfImage" type="text" indexed="true" stored="true" />
+	<field name="npv:PersonalNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:CorporateNames" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:UseRestrictions" type="text" indexed="true" stored="true" />
+	<field name="npv:Event" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:FileAddress" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:ImageType" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:DateOfScan" type="tdate" indexed="true" stored="true" />
+	<field name="npv:ScannedBy" type="text" indexed="true" stored="true" />
+	<field name="npv:ID" type="text" indexed="true" stored="true" />
+	<field name="npv:SortID" type="string" indexed="true" stored="true" />
+	<field name="npv:DisplayDate" type="text" indexed="true" stored="true" />
+	<field name="npv:CreatedBy" type="text" indexed="true" stored="true" />
+	<field name="npv:DateCreated" type="tdate" indexed="true" stored="true" />
+	<field name="npv:ModifiedBy" type="text" indexed="true" stored="true" />
+	<field name="npv:DateModified" type="tdate" indexed="true" stored="true" />
+	<field name="npv:URLLocation" type="text" indexed="true" stored="true" />
+	<field name="npv:LocationName" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:VenueCode" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:VenueName" type="text" indexed="true" stored="true" multiValued="true" />
+	<!-- End Visual Materials -->
+
+	<!-- Begin Audio Materials -->
+	<field name="npa:ProgramID" type="text" indexed="true" stored="true" />
+	<field name="npa:Collection" type="text" indexed="true" stored="true" />
+	<field name="npa:OriginalFormat" type="text" indexed="true" stored="true" />
+	<field name="npa:Date" type="tdate" indexed="true" stored="true" />
+	<field name="npa:Location" type="text" indexed="true" stored="true" multiValued="true" />
+	<field name="npa:EventTypeName" type="text" indexed="true" stored="true" />
+	<field name="npa:ConductorName" type="text" indexed="true" stored="true" />
+	<field name="npa:SoloistsAndInstruments" type="text" indexed="true" stored="true" />
+	<field name="npa:ComposerWork" type="text" indexed="true" stored="true" />
+	<field name="npa:OrchestraName" type="text" indexed="true" stored="true" />
+	<field name="npa:IntermissionFeature" type="text" indexed="true" stored="true" />
+	<field name="npa:Time" type="text" indexed="true" stored="true" />
+	<field name="npa:LocationName" type="text" indexed="true" stored="true" />
+	<field name="npa:VenueCode" type="text" indexed="true" stored="true" />
+	<field name="npa:VenueName" type="text" indexed="true" stored="true" />
+	<field name="npa:SubEventName" type="text" indexed="true" stored="true" />
+	<field name="npa:ConductorLastName" type="text" indexed="true" stored="true" />
+	<field name="npa:WorksMovSeq" type="text" indexed="true" stored="true" />
+	<field name="npa:WorksIdDisplay" type="text" indexed="true" stored="true" />
+	<field name="npa:URLLocation" type="text" indexed="true" stored="true" />
+	<field name="npa:IntermissionGuests" type="text" indexed="true" stored="true" />
+	<field name="npa:Announcer" type="text" indexed="true" stored="true" />
+	<field name="npa:Engineer" type="text" indexed="true" stored="true" />
+	<field name="npa:Producer" type="text" indexed="true" stored="true" />
+	<field name="npa:Sponsor" type="text" indexed="true" stored="true" />
+	<!-- End Audio Materials -->
+	
+	<!--  Begin tagged fields -->
+	<field name="npt:assetId" type="string" indexed="true" stored="true" />
+	<field name="npt:imageId" type="string" indexed="true" stored="true" />
+	<field name="npt:page" type="int" indexed="true" stored="true" />
+	<field name="npt:imageWidth" type="float" indexed="true" stored="true" />
+	<field name="npt:imageHeight" type="float" indexed="true" stored="true" />
+	<field name="npt:username" type="string" indexed="true" stored="true" />
+	<field name="npt:content" type="textgen" indexed="true" stored="true" />
+	<field name="npt:type" type="text" indexed="true" stored="true" />
+	<field name="npt:color" type="text" indexed="true" stored="true" />
+	<field name="npt:width" type="float" indexed="true" stored="true" />
+	<field name="npt:start1" type="float" indexed="true" stored="true" />
+	<field name="npt:start2" type="float" indexed="true" stored="true" />
+	<field name="npt:end1" type="float" indexed="true" stored="true" />
+	<field name="npt:end2" type="float" indexed="true" stored="true" />
+	<field name="npt:head" type="text" indexed="true" stored="true" />
+	<field name="npt:tail" type="text" indexed="true" stored="true" />
+	<field name="npt:p1" type="float" indexed="true" stored="true" />
+	<field name="npt:p2" type="float" indexed="true" stored="true" />
+	<field name="npt:p3" type="float" indexed="true" stored="true" />
+	<field name="npt:p4" type="float" indexed="true" stored="true" />
+	<field name="npt:status" type="string" indexed="true" stored="true" />
+	
+	<field name="npt:tagged" type="textgen" indexed="true" stored="true" multiValued="true" />
+	<!--  End tagged fields -->
+
+	<!-- Facet fields that are populated with the copyFields below or during ingestion time through custom logic -->
+	<field name="nyp:DocumentType_facet" type="string" indexed="true" stored="true" />
+
+	<!-- Begin Program Facets -->
+	<field name="npp:ConductorName_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistsNames_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksIDs_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:LocationName_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:VenueName_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:EventTypeName_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:Season_facet" type="string" indexed="true" stored="true" />
+	<field name="npp:WorksComposerNames_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:WorksConductorNames_facet" type="string" indexed="true" stored="true" multiValued="true" />
+
+	<field name="npp:ComposerWorksTitle_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:SoloistComposerWorksTitle_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npp:ConductorComposerWorksTitle_facet" type="string" indexed="true" stored="true" multiValued="true" />
+
+	<!-- End Program Facets -->
+
+	<!-- Begin Printed Music Facets -->
+	<field name="npm:ScoreMarkingArtist_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npm:ComposerNameShortTitle_facet" type="string" indexed="true" stored="true" />
+	<field name="npm:ComposerName_facet" type="string" indexed="true" stored="true" />
+	<!-- End Printed Music Facets -->
+
+    <!-- Begin Part Facets -->
+    <field name="npm:UsedByArtistName_facet" type="string" indexed="true" stored="true" multiValued="true" />
+    <field name="npm:PartMarkingArtist_facet" type="string" indexed="true" stored="true" multiValued="true" />
+    <field name="npm:PartTypeDesc_facet" type="string" indexed="true" stored="true" multiValued="true" />
+    <!-- End Part Facets -->
+
+	<!-- Begin Business Records Facets -->
+	<field name="npb:Names_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:Subject_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npb:RecordGroup_facet" type="string" indexed="true" stored="true" />
+	<field name="npb:Series_facet" type="string" indexed="true" stored="true" />
+	<field name="npb:SubSeries_facet" type="string" indexed="true" stored="true" />
+	<!-- End Business Records Facets -->
+
+	<!-- Begin Visuals Facets -->/>
+	<field name="npv:Photographer_facet" type="string" indexed="true" stored="true" />
+	<field name="npv:CopyrightHolder_facet" type="string" indexed="true" stored="true" />
+	<field name="npv:ImageType_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:PlaceOfImage_facet" type="string" indexed="true" stored="true" />
+	<field name="npv:Event_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:PersonalNames_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:LocationName_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<field name="npv:VenueName_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<!-- End Visuals Facets -->
+
+	<!-- Begin Tagged Facets -->
+	<field name="npt:content_facet" type="string" indexed="true" stored="true" />
+	<field name="npt:tagged_facet" type="string" indexed="true" stored="true" multiValued="true" />
+	<!-- End Tagged Facets -->
+      
+ </fields>
+
+ <!-- Field to use to determine and enforce document uniqueness. 
+      Unless this field is marked with required="false", it will be a required field
+   -->
+ <uniqueKey>id</uniqueKey>
+
+ <!-- field for the QueryParser to use when an explicit fieldname is absent -->
+ <defaultSearchField>nyp:DocumentType</defaultSearchField>
+
+ <!-- SolrQueryParser configuration: defaultOperator="AND|OR" -->
+ <solrQueryParser defaultOperator="OR"/>
+
+	<!-- use a copyField to create each facet field for the various fields of type text-->
+	<copyField source="nyp:DocumentType" dest="nyp:DocumentType_facet"/>	
+
+	<!-- Begin Copy Program Facets -->
+	<copyField source="npp:ConductorName" dest="npp:ConductorName_facet"/>
+	<copyField source="npp:SoloistsNames" dest="npp:SoloistsNames_facet"/>
+	<copyField source="npp:WorksIDs" dest="npp:WorksIDs_facet"/>
+	<copyField source="npp:LocationName" dest="npp:LocationName_facet"/>
+	<!-- <copyField source="npp:VenueName" dest="npp:VenueName_facet"/> -->
+	<copyField source="npp:SubEventName" dest="npp:EventTypeName_facet"/>
+	<copyField source="npp:Season" dest="npp:Season_facet"/>
+	<copyField source="npp:WorksComposerNames" dest="npp:WorksComposerNames_facet"/>
+	<!-- <copyField source="npp:WorksConductorNames" dest="npp:WorksConductorNames_facet"/> -->
+	<!-- End Copy Program Facets -->
+
+	<!-- Begin Copy Printed Music Facets -->
+	<!-- <copyField source="npm:ScoreMarkingArtist" dest="npm:ScoreMarkingArtist_facet"/> -->
+	<copyField source="npm:ComposerName" dest="npm:ComposerName_facet"/>
+	<!-- End Copy Printed Music Facets -->
+
+    <!-- Begin copy Part Facets -->
+    <copyField source="npm:UsedByArtistName" dest="npm:UsedByArtistName_facet" />
+    <copyField source="npm:PartMarkingArtist" dest="npm:PartMarkingArtist_facet" />
+    <copyField source="npm:PartTypeDesc" dest="npm:PartTypeDesc_facet" />
+    <!-- End Copy Part Facets -->
+
+	<!-- Begin Copy Business Records Facets and Sort Fields -->
+	<copyField source="npb:Names" dest="npb:Names_facet"/>
+	<copyField source="npb:Subject" dest="npb:Subject_facet"/>
+	<copyField source="npb:RecordGroup" dest="npb:RecordGroup_facet"/>
+	<copyField source="npb:Series" dest="npb:Series_facet"/>
+	<copyField source="npb:SubSeries" dest="npb:SubSeries_facet"/>
+
+	<copyField source="npb:Series" dest="npb:SortSeries"/>
+	<copyField source="npb:SubSeries" dest="npb:SortSubSeries"/>
+	<!-- End Copy Business Records Facets and Sort Fields -->
+
+	<!-- Begin Copy Visuals Facets and Sort Fields-->/>
+	<copyField source="npv:Photographer" dest="npv:Photographer_facet"/>
+	<copyField source="npv:CopyrightHolder" dest="npv:CopyrightHolder_facet"/>
+	<copyField source="npv:ImageType" dest="npv:ImageType_facet"/>
+	<copyField source="npv:PlaceOfImage" dest="npv:PlaceOfImage_facet"/>
+	<copyField source="npv:Event" dest="npv:Event_facet"/>
+	<copyField source="npv:PersonalNames" dest="npv:PersonalNames_facet"/>
+
+	<copyField source="npv:ID" dest="npv:SortID"/>
+	<copyField source="npv:LocationName" dest="npv:LocationName_facet"/>
+	<!-- <copyField source="npv:VenueName" dest="npv:VenueName_facet"/> -->
+	<!-- End Copy Visuals Facets and Sort Fields-->
+	
+	<!--  Begin Tagged Facets  -->
+	<copyField source="npt:content" dest="npt:content_facet" />
+	<copyField source="npt:tagged" dest="npt:tagged_facet" />
+	<!-- End Tagged Facets -->
+</schema>
