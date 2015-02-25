@@ -1,0 +1,2 @@
+# solr
+placeholder for now
